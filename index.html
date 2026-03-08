@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A Special Puzzle</title>
+    
+    <!-- Tailwind CSS for Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM (Core Libraries) - Switched to CDNJS for better reliability -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel (Translates React JSX to code the browser can read instantly) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.3/babel.min.js"></script>
+</head>
+<body class="bg-rose-50 text-slate-800 font-sans">
+    
+    <!-- The app will be injected into this div -->
+    <div id="root">
+        <!-- If React fails to load, this text will stay on the screen -->
+        <div class="min-h-screen flex flex-col items-center justify-center p-4 text-center">
+            <h2 class="text-2xl font-bold text-rose-500 mb-2">Loading Puzzle...</h2>
+            <p class="text-rose-400">If this screen doesn't disappear, your browser might be blocking the scripts. Make sure you have an internet connection for the first load!</p>
+        </div>
+    </div>
+
+    <!-- The actual React Code -->
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- Custom SVG Icons ---
+        const Heart = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+            </svg>
+        );
+        
+        const ImageIcon = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
+                <circle cx="9" cy="9" r="2"/>
+                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+            </svg>
+        );
+        
+        const RefreshCcw = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                <path d="M16 21v-5h5"/>
+            </svg>
+        );
+
+        // --- Falling Hearts Confetti Component ---
+        const HeartConfetti = () => {
+            const [hearts, setHearts] = useState([]);
+
+            useEffect(() => {
+                const newHearts = Array.from({ length: 60 }).map((_, i) => ({
+                    id: i,
+                    left: Math.random() * 100 + 'vw',
+                    animationDuration: Math.random() * 3 + 2 + 's',
+                    animationDelay: Math.random() * 1.5 + 's',
+                    fontSize: Math.random() * 1.5 + 0.8 + 'rem',
+                    rotation: Math.random() * 360,
+                }));
+                setHearts(newHearts);
+            }, []);
+
+            return (
+                <div className="fixed inset-0 pointer-events-none overflow-hidden z-50">
+                    <style>{`
+                        @keyframes fall {
+                            0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+                            100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+                        }
+                        .falling-heart { animation: fall linear forwards; }
+                    `}</style>
+                    {hearts.map(h => (
+                        <div 
+                            key={h.id} 
+                            className="falling-heart absolute top-[-10%]"
+                            style={{ 
+                                left: h.left, 
+                                animationDuration: h.animationDuration, 
+                                animationDelay: h.animationDelay, 
+                                fontSize: h.fontSize 
+                            }}
+                        >
+                            ❤️
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+
+        // --- Main App Component ---
+        function App() {
+            const [gameState, setGameState] = useState('start'); 
+            const [pieces, setPieces] = useState([]);
+            const [selectedPieceIndex, setSelectedPieceIndex] = useState(null);
+            
+            // ==========================================
+            // REPLACE THE URL BELOW WITH YOUR IMAGE LINK
+            // ==========================================
+            const defaultImage = 'https://iili.io/qIIncVj.jpg'; 
+            
+            const [imgSrc, setImgSrc] = useState(defaultImage);
+            const [imageLoaded, setImageLoaded] = useState(false);
+            const [imageError, setImageError] = useState(false);
+            const fileInputRef = useRef(null);
+
+            const initializePuzzle = () => {
+                let initialPieces = Array.from({ length: 9 }, (_, i) => i);
+                let isSolved = true;
+                while (isSolved) {
+                    for (let i = initialPieces.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [initialPieces[i], initialPieces[j]] = [initialPieces[j], initialPieces[i]];
+                    }
+                    isSolved = initialPieces.every((val, index) => val === index);
+                }
+                setPieces(initialPieces);
+                setGameState('playing');
+                setSelectedPieceIndex(null);
+            };
+
+            const handlePieceClick = (index) => {
+                if (gameState !== 'playing') return;
+
+                if (selectedPieceIndex === null) {
+                    setSelectedPieceIndex(index);
+                } else {
+                    if (selectedPieceIndex === index) {
+                        setSelectedPieceIndex(null);
+                        return;
+                    }
+                    const newPieces = [...pieces];
+                    const temp = newPieces[selectedPieceIndex];
+                    newPieces[selectedPieceIndex] = newPieces[index];
+                    newPieces[index] = temp;
+                    
+                    setPieces(newPieces);
+                    setSelectedPieceIndex(null);
+                    checkWin(newPieces);
+                }
+            };
+
+            const checkWin = (currentPieces) => {
+                const isWin = currentPieces.every((piece, index) => piece === index);
+                if (isWin) {
+                    setGameState('won');
+                }
+            };
+
+            const getBgPosition = (correctIndex) => {
+                const col = correctIndex % 3;
+                const row = Math.floor(correctIndex / 3);
+                return `${col * 50}% ${row * 50}%`;
+            };
+
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        setImgSrc(event.target.result);
+                        setImageError(false);
+                        setImageLoaded(true);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const triggerFileInput = () => {
+                if (fileInputRef.current) {
+                    fileInputRef.current.click();
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col items-center justify-center p-4">
+                    
+                    <img 
+                        src={imgSrc} 
+                        alt="Puzzle Source" 
+                        className="hidden" 
+                        onLoad={() => setImageLoaded(true)}
+                        onError={() => setImageError(true)}
+                        crossOrigin="anonymous" 
+                    />
+
+                    {/* --- START SCREEN --- */}
+                    {gameState === 'start' && (
+                        <div className="max-w-md w-full bg-white/80 backdrop-blur-md p-8 rounded-3xl shadow-xl border border-white flex flex-col items-center text-center">
+                            <div className="relative mb-6">
+                                <Heart className="w-24 h-24 text-rose-500 animate-pulse" />
+                                <div className="absolute inset-0 bg-rose-400 blur-2xl opacity-40 rounded-full z-[-1]"></div>
+                            </div>
+                            
+                            <h1 className="text-3xl font-bold text-rose-600 mb-2 tracking-tight">A Special Puzzle</h1>
+                            <p className="text-rose-400/80 font-medium mb-8">Put the pieces of our memory back together.</p>
+                            
+                            {imageError ? (
+                                <div className="w-full flex flex-col items-center gap-4 bg-rose-50 p-4 rounded-xl border border-rose-100">
+                                    <ImageIcon className="w-8 h-8 text-rose-400" />
+                                    <p className="text-sm text-slate-600">
+                                        Oops! I couldn't load the image from the link provided. Please select it directly from your device.
+                                    </p>
+                                    <input 
+                                        type="file" 
+                                        accept="image/*" 
+                                        onChange={handleImageUpload} 
+                                        ref={fileInputRef}
+                                        className="hidden"
+                                    />
+                                    <button 
+                                        onClick={triggerFileInput}
+                                        className="bg-rose-500 hover:bg-rose-600 text-white font-bold py-3 px-6 rounded-full shadow-lg shadow-rose-200 transition-all w-full flex justify-center items-center gap-2"
+                                    >
+                                        Choose Photo
+                                    </button>
+                                </div>
+                            ) : (
+                                <button 
+                                    onClick={initializePuzzle}
+                                    disabled={!imageLoaded}
+                                    className={`bg-rose-500 hover:bg-rose-600 text-white font-bold py-4 px-12 rounded-full text-xl shadow-lg shadow-rose-200 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-3 ${!imageLoaded ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    Start <Heart className="w-5 h-5" />
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* --- PUZZLE BOARD --- */}
+                    {(gameState === 'playing' || gameState === 'won') && (
+                        <div className="w-full max-w-md flex flex-col items-center">
+                            
+                            <div className="mb-6 text-center">
+                                <h2 className="text-2xl font-bold text-rose-600 flex items-center justify-center gap-2">
+                                    <Heart className="w-6 h-6" /> 
+                                    {gameState === 'won' ? 'Perfect!' : 'Solve the Puzzle'}
+                                    <Heart className="w-6 h-6" />
+                                </h2>
+                                {gameState === 'playing' && (
+                                    <p className="text-sm text-rose-400 mt-2 font-medium bg-white px-4 py-1 rounded-full shadow-sm inline-block border border-rose-100">
+                                        Tap two pieces to swap them
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="relative w-full aspect-square bg-white p-2 rounded-2xl shadow-2xl border border-rose-100">
+                                <div className="w-full h-full grid grid-cols-3 grid-rows-3 gap-1 overflow-hidden rounded-xl">
+                                    {pieces.map((correctIndex, currentIndex) => {
+                                        const isSelected = selectedPieceIndex === currentIndex;
+                                        return (
+                                            <div
+                                                key={currentIndex}
+                                                onClick={() => handlePieceClick(currentIndex)}
+                                                className={`relative cursor-pointer transition-transform duration-200 ease-in-out
+                                                    ${isSelected ? 'scale-90 z-10 shadow-lg ring-4 ring-rose-400 ring-offset-2 rounded-lg' : 'hover:scale-[0.98]'}
+                                                    ${gameState === 'won' ? 'scale-100 cursor-default transition-all duration-1000' : ''}
+                                                `}
+                                                style={{
+                                                    backgroundImage: `url('${imgSrc}')`,
+                                                    backgroundSize: '300% 300%',
+                                                    backgroundPosition: getBgPosition(correctIndex),
+                                                }}
+                                            >
+                                                {isSelected && (
+                                                    <div className="absolute inset-0 bg-rose-500/20 rounded-lg"></div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Win Overlay */}
+                                {gameState === 'won' && (
+                                    <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/40 backdrop-blur-[2px] rounded-2xl transition-all duration-1000">
+                                        <div className="bg-white/95 px-8 py-6 rounded-3xl shadow-2xl border border-rose-100 text-center transform hover:scale-105 transition-transform duration-300">
+                                            <Heart className="w-16 h-16 text-rose-500 mx-auto mb-4 animate-bounce" />
+                                            <h3 className="text-2xl font-bold text-slate-800 mb-2">Congratulations</h3>
+                                            <p className="text-rose-500 font-semibold text-lg">we are complete ❤️</p>
+                                            
+                                            <button 
+                                                onClick={() => setGameState('start')}
+                                                className="mt-6 text-sm text-slate-500 hover:text-rose-500 flex items-center justify-center gap-2 mx-auto font-medium transition-colors"
+                                            >
+                                                <RefreshCcw className="w-4 h-4" /> Play Again
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* --- CONFETTI EFFECT --- */}
+                    {gameState === 'won' && <HeartConfetti />}
+
+                </div>
+            );
+        }
+
+        // --- Render the Application ---
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
